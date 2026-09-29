@@ -124,9 +124,16 @@ DATABRICKS_PROFILE=DEFAULT python scripts/benchmark.py \
 
 ## Key differences from the official sample
 
-The [official starter notebook](https://docs.databricks.com/aws/en/machine-learning/model-serving/serve-custom-llms)
-uses `vllm==0.11.2` / `transformers==4.57.6` for a 4B model.
-Qwen3.5-27B requires newer dependencies, and two additional fixes are needed:
+Databricks provides two relevant official references:
+
+- **[Qwen3.5-0.8B fine-tuning + serving tutorial](https://docs.databricks.com/aws/en/machine-learning/ai-runtime/examples/tutorials/sgc-finetune-qwen3.5-0.8b)**
+  — end-to-end SFT (H100) → serving on `GPU_MEDIUM` (A10) for a 0.8B model.
+- **[Custom LLM Serving starter notebook](https://docs.databricks.com/aws/en/machine-learning/model-serving/serve-custom-llms)**
+  — `vllm==0.11.2` / `transformers==4.57.6`, ~4B model on `GPU_MEDIUM` (A10).
+
+Both official examples target A10 (`GPU_MEDIUM`), which is sufficient for sub-4B models.
+At 27B scale, A10 has insufficient VRAM — hence `GPU_LARGE_RTX` (96 GB) — and two
+dependency fixes are required:
 
 ### Fix 1 — Large model upload: `databricks-sdk>=0.102.0`
 
