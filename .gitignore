@@ -1,0 +1,13 @@
+# Blog drafts — local only, not for GitHub
+BLOG_DRAFT*.md
+blog_draft*.md
+
+# macOS
+.DS_Store
+Icon*
+
+# Work logs and temp files
+*.log
+*.tmp
+__pycache__/
+.venv/
