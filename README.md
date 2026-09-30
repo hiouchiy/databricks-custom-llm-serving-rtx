@@ -176,6 +176,47 @@ All versions are pinned for reproducibility:
 
 ---
 
+## Troubleshooting: serving base-image drift
+
+The serving container ships a base image whose contents (e.g. vLLM, torch, flash_attn)
+can change over time. If you rely on packages that happen to be in the base image, a
+deploy that worked last week can fail today. Two symptoms and their fixes:
+
+### `No module named 'vllm'` at container start
+
+The base image stopped providing vLLM. **Fix:** pin the full serving stack in
+`extra_pip_requirements` so the container installs it regardless of the base image:
+
+```python
+extra_pip_requirements=["vllm==0.19.1", "transformers==5.5.4",
+                        "mlflow==3.12.0", "fastapi<0.137.0", "hf_transfer==0.1.9"]
+```
+
+(The notebooks in this repo already do this.)
+
+### `flash_attn ... undefined symbol` / `EngineCore failed to start`
+
+The base image's `flash_attn` was built against a different torch ABI, so importing it
+crashes. For a multimodal model like Qwen3.5, vLLM's rotary-embedding init imports
+`flash_attn` when it is discoverable. vLLM 0.19.1 guards this with
+`if find_spec("flash_attn") is not None:` — so if `flash_attn` is **not** discoverable,
+vLLM falls back to a native rotary implementation and starts cleanly. (vLLM's main
+decoder attention uses the vendored `vllm_flash_attn`, which is unaffected — so text
+throughput is not meaningfully impacted.)
+
+**Fix:** make the broken `flash_attn` undiscoverable at the start of the serving
+entrypoint (quote-free, so it is safe inside the `bash -lc '...'` wrapper):
+
+```bash
+mv <site-packages>/flash_attn <site-packages>/flash_attn_disabled 2>/dev/null || true
+```
+
+Find `<site-packages>` from the traceback in the endpoint's Service logs (the path in the
+`ImportError` line). This is environment-specific, so it is documented here rather than
+baked into the default entrypoint.
+
+---
+
 ## References
 
 - [Serve custom LLMs — Databricks documentation](https://docs.databricks.com/aws/en/machine-learning/model-serving/serve-custom-llms)

@@ -48,8 +48,8 @@ print(f"CWD: {workdir}  free: {usage.free/1e9:.1f} GB")
 
 # COMMAND ----------
 
-CATALOG  = "serverless_stable_lxejgv_catalog"
-SCHEMA   = "sgc"
+CATALOG  = "your_catalog"   # Unity Catalog catalog name
+SCHEMA   = "your_schema"  # Unity Catalog schema name
 
 MODEL_REPO_ID     = "Qwen/Qwen3.8-27B-FP8"
 ARTIFACTS_PATH    = "qwen38_27b_fp8"

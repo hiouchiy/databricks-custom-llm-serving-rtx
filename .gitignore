@@ -11,3 +11,6 @@ Icon*
 *.tmp
 __pycache__/
 .venv/
+
+# Local work logs / helper scripts
+worklog/

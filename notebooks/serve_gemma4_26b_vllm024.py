@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Custom LLM Serving — Gemma 4 26B-A4B-it on RTX PRO 6000 (GPU_LARGE_RTX)
+# MAGIC # Custom LLM Serving — Gemma 4 26B-A4B-it on RTX PRO 6000 (GPU_LARGE_RTX) [vLLM 0.24.0]
 # MAGIC
 # MAGIC | Stage | Compute |
 # MAGIC |---|---|
@@ -8,11 +8,23 @@
 # MAGIC | The serving endpoint | 1×RTX PRO 6000 96 GB (`GPU_LARGE_RTX`, TP=1) |
 # MAGIC
 # MAGIC Model: `google/gemma-4-26B-A4B-it` (26B MoE, 4B active, ~52 GiB BF16)
-# MAGIC vLLM: **0.24.0** (minimum for `Gemma4ForConditionalGeneration`)
+# MAGIC Serving container: **vLLM 0.24.0** via `extra_pip_requirements`
 # MAGIC
-# MAGIC **HuggingFace token required.**
-# MAGIC Gemma models require acceptance of Google's Community License Agreement.
-# MAGIC Set `HF_TOKEN` as a Databricks secret or environment variable before running.
+# MAGIC ## vLLM 0.24.0 を使う理由
+# MAGIC vLLM 0.19.1 (AI Runtime base) は Gemma4 をサポートしているが、
+# MAGIC 0.24.0 はより安定したサポートが報告されている。
+# MAGIC
+# MAGIC ## 重要な依存関係
+# MAGIC Serving-container pins (`extra_pip_requirements`):
+# MAGIC - `vllm==0.24.0`
+# MAGIC - `mlflow==3.14.0` — `mlflow==3.12.0` conflicts with `vllm==0.24.0` (starlette).
+# MAGIC - `transformers==5.13.0` — must be pinned. Newer transformers treats Gemma4's `head_dim`
+# MAGIC   as a per-layer attribute, and vLLM 0.24.0 fails at startup with
+# MAGIC   `AmbiguousGlobalPerLayerAttributeError: 'head_dim' is a per-layer attribute`.
+# MAGIC - `fastapi<0.137.0` — health-check fix (same as the Qwen notebooks).
+# MAGIC
+# MAGIC The notebook itself keeps the AI Runtime base vLLM (the pip constraints file pins it);
+# MAGIC it only downloads, logs, and registers the model.
 
 # COMMAND ----------
 
@@ -21,11 +33,10 @@
 
 # COMMAND ----------
 
-# vLLM 0.19.1 (AI Runtime base) supports Gemma4ForConditionalGeneration.
-# Do NOT override vLLM version — the AI Runtime pipConstraints.txt pins it
-# and attempting to upgrade causes pip to fail.
+# Do not install vllm here: the AI Runtime pip constraints file pins it and an upgrade fails.
+# The serving container gets vllm==0.24.0 via extra_pip_requirements below.
 %pip install \
-  "transformers>=5.5.3" \
+  "transformers==5.5.4" \
   "openai==2.17.0" \
   "hf_transfer==0.1.9" \
   "mlflow==3.12.0" \
@@ -69,7 +80,7 @@ SERVED_MODEL_NAME = "gemma4"
 DTYPE             = "bfloat16"
 SERVING_PORT      = 8080
 
-UC_MODEL_NAME = f"{CATALOG}.{SCHEMA}.gemma4_26b_a4b_it"
+UC_MODEL_NAME = f"{CATALOG}.{SCHEMA}.gemma4_26b_a4b_it_v024"  # separate from vLLM 0.19.1 version
 
 # COMMAND ----------
 
@@ -116,13 +127,23 @@ model_info = mlflow.pyfunc.log_model(
     python_model=LLMModel(),
     artifacts={"model_dir": ARTIFACTS_PATH},
     metadata={"task": "llm/v1/chat", "entrypoint": entrypoint_serving(SERVING_PORT)},
-    # vLLM 0.19.1 (AI Runtime base) supports Gemma4ForConditionalGeneration.
+    # See the header cell for why each pin is required.
     extra_pip_requirements=[
-        "mlflow==3.12.0",
+        "mlflow==3.14.0",
         "fastapi<0.137.0",
+        "vllm==0.24.0",
+        "transformers==5.13.0",
     ],
 )
 print("model_uri:", model_info.model_uri)
+
+# COMMAND ----------
+
+# Verify the serving requirements before registering: exactly one transformers pin, ==5.13.0.
+reqs = open(mlflow.pyfunc.get_model_dependencies(model_info.model_uri)).read()
+print(reqs)
+tf_lines = [l for l in reqs.splitlines() if l.strip().lower().startswith("transformers")]
+assert tf_lines == ["transformers==5.13.0"], f"unexpected transformers pins: {tf_lines}"
 
 # COMMAND ----------
 

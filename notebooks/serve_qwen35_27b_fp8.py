@@ -146,7 +146,10 @@ model_info = mlflow.pyfunc.log_model(
     artifacts={"model_dir": ARTIFACTS_PATH},
     metadata={"task": "llm/v1/chat", "entrypoint": entrypoint_serving(SERVING_PORT)},
     # fastapi<0.137.0: 0.137.0 breaks prometheus-fastapi-instrumentator → /v1/models 500
-    extra_pip_requirements=["mlflow==3.12.0", "fastapi<0.137.0"],
+    # Pin the serving stack so the container does not depend on the serving base image,
+    # which can drift over time (e.g. vLLM disappearing or a torch/flash_attn ABI mismatch).
+    extra_pip_requirements=["vllm==0.19.1", "transformers==5.5.4",
+                            "mlflow==3.12.0", "fastapi<0.137.0", "hf_transfer==0.1.9"],
 )
 print("model_uri:", model_info.model_uri)
 
